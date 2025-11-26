@@ -1,5 +1,28 @@
 #!/bin/bash
 
+#
+# hardening_audit.sh
+#
+# Author: Aaron Gruber
+#
+# Description:
+# This script performs a security hardening audit on a Fedora Workstation.
+# It checks various security settings and provides recommendations for improvement.
+# The audit covers the following areas:
+#   - Network and Firewall
+#   - Kernel Hardening
+#   - Boot Security
+#   - Physical & Services
+#
+# Usage:
+#   sudo ./hardening_audit.sh
+#
+# The script must be run as root to access all necessary configuration files.
+#
+# Changelog:
+#   2025-11-26 - Initial version.
+#
+
 # Fedora Workstation Hardening Audit Script
 # Checks against common hardening steps: Firewall, Kernel, Boot, and Services.
 
