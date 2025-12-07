@@ -59,6 +59,11 @@ echo "Writing rules to: $outfile"
     printf '%s\n' "$rules"
 } > "$outfile"
 
+# Adjust file permissions. usbguard.service expects 600 and will fail if it is not.
+chmod 600 "$outfile"
+chown root:root "$outfile"
+
+
 # Reload USBGuard
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active usbguard >/dev/null 2>&1; then
     systemctl reload usbguard || systemctl restart usbguard
