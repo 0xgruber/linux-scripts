@@ -95,6 +95,15 @@ echo "Append complete."
 echo "  Added  : $added rule(s)"
 echo "  Skipped: $skipped existing rule(s)"
 
+# Check and fix ownership/permissions only if needed
+read -r perm owner group < <(stat -c '%a %U %G' "$outfile")
+
+if [[ "$owner" != "root" || "$group" != "root" || "$perm" != "600" ]]; then
+    echo "Fixing ownership/permissions on $outfile (was $perm $owner:$group)"
+    chown root:root "$outfile"
+    chmod 600 "$outfile"
+fi
+
 # Reload USBGuard
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active usbguard >/dev/null 2>&1; then
     systemctl reload usbguard || systemctl restart usbguard

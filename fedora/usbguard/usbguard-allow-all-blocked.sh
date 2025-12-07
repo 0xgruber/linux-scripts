@@ -53,16 +53,25 @@ if [[ -z "$rules" ]]; then
 fi
 
 echo "Writing rules to: $outfile"
+
+# --- HARDENING START ---
+# Set umask to 077 ensures files are created as 600 (rw-------) automatically
+# We capture the old umask to restore it later (good practice)
+old_umask=$(umask)
+umask 077
+
 {
     echo "# Auto-generated allow rules for currently blocked USB devices"
     echo "# Created: $(date)"
     printf '%s\n' "$rules"
 } > "$outfile"
 
-# Adjust file permissions. usbguard.service expects 600 and will fail if it is not.
-chmod 600 "$outfile"
-chown root:root "$outfile"
+# Restore previous umask
+umask "$old_umask"
+# --- HARDENING END ---
 
+# Explicit ownership check is still good to keep as a failsafe
+chown root:root "$outfile"
 
 # Reload USBGuard
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active usbguard >/dev/null 2>&1; then
