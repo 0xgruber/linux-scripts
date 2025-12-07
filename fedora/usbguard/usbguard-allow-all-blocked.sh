@@ -43,7 +43,6 @@
 # Repository: https://gitlab.vaultcloud.xyz/aarongruber/linux-scripts.git
 #
 
-#!/usr/bin/env bash
 set -euo pipefail
 
 # Must be root
@@ -73,9 +72,9 @@ fi
 
 echo "Collecting blocked USB devices..."
 
-# Get unique numeric IDs of blocked devices
+# Get unique IDs for devices currently blocked by USBGuard
 ids=$(usbguard list-devices \
-    | awk '/block/ { gsub(/[^0-9]/, "", $1); print $1 }' \
+    | awk '$2 == "block" { for (i = 1; i <= NF; ++i) if ($i == "id") { print $(i+1); break } }' \
     | sort -u)
 
 if [[ -z "${ids}" ]]; then
