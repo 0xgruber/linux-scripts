@@ -59,8 +59,6 @@ fi
 outfile="${rules_dir}/${files[index]}"
 
 echo "Using existing rules file: $outfile"
-echo "Collecting blocked USB devices..."
-
 blocked_output=$(usbguard list-devices --blocked)
 
 if [[ -z "${blocked_output//[[:space:]]/}" ]]; then
@@ -78,7 +76,6 @@ while IFS= read -r line; do
 
     rule=$(printf '%s\n' "$line" \
         | sed -E 's/^[0-9]+:\s+block/allow/' \
-        | sed -E 's/\s+via-port "[^"]*"//g' \
         | sed -E 's/\s+parent-hash "[^"]*"//g')
 
     # Skip empty or malformed transforms
@@ -86,10 +83,10 @@ while IFS= read -r line; do
 
     # If exact rule already present, skip
     if grep -qxF "$rule" "$outfile"; then
-        ((skipped++))
+        ((skipped+=1))
     else
         printf '%s\n' "$rule" >> "$outfile"
-        ((added++))
+        ((added+=1))
         regex_id='allow id ([^[:space:]]+)'
         if [[ "$rule" =~ $regex_id ]]; then
             rule_id="${BASH_REMATCH[1]}"
