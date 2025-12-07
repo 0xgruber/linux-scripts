@@ -90,12 +90,14 @@ while IFS= read -r line; do
     else
         printf '%s\n' "$rule" >> "$outfile"
         ((added++))
-        if [[ "$rule" =~ allow\ id\ ([^[:space:]]+) ]]; then
+        regex_id='allow id ([^[:space:]]+)'
+        if [[ "$rule" =~ $regex_id ]]; then
             rule_id="${BASH_REMATCH[1]}"
         else
             rule_id="<unknown-id>"
         fi
-        if [[ "$rule" =~ name\ "([^"]*)" ]]; then
+        regex_name='name "([^"]*)"'
+        if [[ "$rule" =~ $regex_name ]]; then
             rule_name="${BASH_REMATCH[1]}"
         else
             rule_name=""
