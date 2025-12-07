@@ -75,7 +75,8 @@ chown root:root "$outfile"
 
 # Reload USBGuard
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active usbguard >/dev/null 2>&1; then
-    systemctl reload usbguard || systemctl restart usbguard
+    # reload-or-restart avoids the noisy "reload not applicable" error on services
+    systemctl try-reload-or-restart usbguard || echo "Warning: failed to reload usbguard via systemctl" >&2
 elif command -v usbguard >/dev/null 2>&1; then
     usbguard reload || true
 fi

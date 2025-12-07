@@ -61,6 +61,13 @@ outfile="${rules_dir}/${files[index]}"
 echo "Using existing rules file: $outfile"
 echo "Collecting blocked USB devices..."
 
+blocked_output=$(usbguard list-devices --blocked)
+
+if [[ -z "${blocked_output//[[:space:]]/}" ]]; then
+    echo "No blocked devices found. Nothing to do."
+    exit 0
+fi
+
 # We'll loop per-device so we can de-duplicate rules
 added=0
 skipped=0
@@ -81,14 +88,34 @@ while IFS= read -r line; do
     if grep -qxF "$rule" "$outfile"; then
         ((skipped++))
     else
-        echo "$rule" >> "$outfile"
+        printf '%s\n' "$rule" >> "$outfile"
         ((added++))
+        if [[ "$rule" =~ allow\ id\ ([^[:space:]]+) ]]; then
+            rule_id="${BASH_REMATCH[1]}"
+        else
+            rule_id="<unknown-id>"
+        fi
+        if [[ "$rule" =~ name\ "([^"]*)" ]]; then
+            rule_name="${BASH_REMATCH[1]}"
+        else
+            rule_name=""
+        fi
+        if [[ -n "$rule_name" ]]; then
+            pretty_name="$rule_name"
+        else
+            pretty_name="$rule_id"
+        fi
+        echo "  + Added rule for ${pretty_name}" >&2
     fi
-done < <(usbguard list-devices --blocked)
+done <<< "$blocked_output"
 
 if (( added == 0 && skipped == 0 )); then
     echo "No blocked devices found. Nothing to do."
     exit 0
+fi
+
+if (( added == 0 )); then
+    echo "All blocked devices already exist in $outfile"
 fi
 
 echo "Append complete."
@@ -104,9 +131,9 @@ if [[ "$owner" != "root" || "$group" != "root" || "$perm" != "600" ]]; then
     chmod 600 "$outfile"
 fi
 
-# Reload USBGuard
+# Reload USBGuard (reload-or-restart avoids unsupported reload errors)
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active usbguard >/dev/null 2>&1; then
-    systemctl reload usbguard || systemctl restart usbguard
+    systemctl try-reload-or-restart usbguard || echo "Warning: failed to reload usbguard via systemctl" >&2
 elif command -v usbguard >/dev/null 2>&1; then
     usbguard reload || true
 fi
