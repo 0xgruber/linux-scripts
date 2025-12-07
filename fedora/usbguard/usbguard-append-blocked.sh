@@ -4,41 +4,8 @@
 #
 # Description:
 #   Append allow rules for all currently blocked USBGuard devices to an existing
-#   rule file under:
-#
-#       /etc/usbguard/rules.d/<filename>.conf
-#
-#   The script only appends rules for IDs not already present in the file, using
-#   the format:
-#
-#       allow id <ID>
-#
-# Usage:
-#   Run as root or via sudo:
-#       sudo usbguard-append-blocked
-#
-#   The script will:
-#     - List existing rule files in /etc/usbguard/rules.d with index numbers
-#     - Prompt for an index selection
-#     - Append allow rules for all currently blocked devices that are not yet
-#       present in the selected file
-#
-# Requirements:
-#   - Must be executed with root privileges
-#   - usbguard(1) must be installed and functional
-#
-# Behavior:
-#   - Extracts numeric device IDs from `usbguard list-devices`
-#   - Filters only devices marked as "block"
-#   - Strips non-numeric characters (e.g., "#" or ":") from ID field
-#   - Skips IDs that already have an `allow id <ID>` rule
-#   - Appends new allow rules for remaining IDs
-#   - Reloads USBGuard to activate the updated rules
-#
-# Notes:
-#   This is intended as a companion to scripts that generate rule files for
-#   blocked devices. It lets you incrementally extend an existing rules file
-#   instead of creating a new one each time.
+#   rule file under /etc/usbguard/rules.d. Rules preserve id, serial, hash,
+#   name, interface-class, and connect-type, but drop via-port and parent-hash.
 #
 
 set -euo pipefail
@@ -77,7 +44,6 @@ done
 echo
 read -rp "Select rules file by index: " choice
 
-# Basic sanity check
 if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
     echo "Invalid selection (not a number)." >&2
     exit 1
@@ -95,26 +61,35 @@ outfile="${rules_dir}/${files[index]}"
 echo "Using existing rules file: $outfile"
 echo "Collecting blocked USB devices..."
 
-ids=$(usbguard list-devices \
-    | awk '/block/ { gsub(/[^0-9]/, "", $1); print $1 }' \
-    | sort -u)
-
-if [[ -z "${ids}" ]]; then
-    echo "No blocked devices found. Nothing to do."
-    exit 0
-fi
-
+# We'll loop per-device so we can de-duplicate rules
 added=0
 skipped=0
 
-for id in $ids; do
-    if grep -qE "^allow[[:space:]]+id[[:space:]]+${id}([[:space:]]|$)" "$outfile"; then
+while IFS= read -r line; do
+    # Only process lines with "block"
+    [[ "$line" =~ block ]] || continue
+
+    rule=$(printf '%s\n' "$line" \
+        | sed -E 's/^[0-9]+:\s+block/allow/' \
+        | sed -E 's/\s+via-port "[^"]*"//g' \
+        | sed -E 's/\s+parent-hash "[^"]*"//g')
+
+    # Skip empty or malformed transforms
+    [[ -z "$rule" ]] && continue
+
+    # If exact rule already present, skip
+    if grep -qxF "$rule" "$outfile"; then
         ((skipped++))
     else
-        echo "allow id $id" >> "$outfile"
+        echo "$rule" >> "$outfile"
         ((added++))
     fi
-done
+done < <(usbguard list-devices --blocked)
+
+if (( added == 0 && skipped == 0 )); then
+    echo "No blocked devices found. Nothing to do."
+    exit 0
+fi
 
 echo "Append complete."
 echo "  Added  : $added rule(s)"

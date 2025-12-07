@@ -3,44 +3,10 @@
 # usbguard-allow-all-blocked
 #
 # Description:
-#   This script scans the system for all USB devices currently marked as
-#   "blocked" by USBGuard and generates a new rule file inside:
-#
-#       /etc/usbguard/rules.d/<filename>.conf
-#
-#   The file will contain entries in the form:
-#
-#       allow id <ID>
-#
-#   allowing each previously-blocked device. USBGuard is then reloaded so the
-#   new rules take effect immediately.
-#
-# Usage:
-#   Run as root or via sudo:
-#       sudo usbguard-allow-all-blocked
-#
-#   The script will prompt for a filename (without extension) and will refuse
-#   to overwrite an existing rule file of the same name.
-#
-# Requirements:
-#   - Must be executed with root privileges
-#   - usbguard(1) must be installed and functional
-#   - Systemd is recommended but not required (script falls back to usbguard reload)
-#
-# Behavior:
-#   - Extracts numeric device IDs from "usbguard list-devices" output
-#   - Filters only devices marked as "block"
-#   - Strips non-numeric characters (e.g., "#" or ":")
-#   - Writes allow-rules for each ID into the requested rules file
-#   - Reloads USBGuard to activate the new rules
-#
-# Notes:
-#   This script is intended for administrators who want to quickly allow
-#   previously-blocked USB devices while keeping rules organized in rules.d.
-#   It does NOT modify the main rules.conf file.
-#
-# Author: Aaron Gruber
-# Repository: https://gitlab.vaultcloud.xyz/aarongruber/linux-scripts.git
+#   Generate a new USBGuard rules.d file containing allow rules for all
+#   currently blocked devices. Rules preserve id, serial, hash, name,
+#   interface-class, and connect-type, but drop port/topology-specific
+#   fields such as via-port and parent-hash.
 #
 
 set -euo pipefail
@@ -57,7 +23,6 @@ if ! command -v usbguard >/dev/null 2>&1; then
 fi
 
 read -rp "Enter new USBGuard rules filename (without extension): " fname
-fname="${fname%.conf}"
 
 if [[ -z "${fname}" ]]; then
     echo "Filename cannot be empty." >&2
@@ -73,12 +38,16 @@ fi
 
 echo "Collecting blocked USB devices..."
 
-# Get unique IDs for devices currently blocked by USBGuard
-ids=$(usbguard list-devices \
-    | awk '$2 == "block" { for (i = 1; i <= NF; ++i) if ($i == "id") { print $(i+1); break } }' \
-    | sort -u)
+# Transform blocked device lines into allow rules:
+# - strip leading index + "block"
+# - change "block" → "allow"
+# - drop via-port and parent-hash fields
+rules=$(usbguard list-devices --blocked \
+    | sed -E 's/^[0-9]+:\s+block/allow/' \
+    | sed -E 's/\s+via-port "[^"]*"//g' \
+    | sed -E 's/\s+parent-hash "[^"]*"//g')
 
-if [[ -z "${ids}" ]]; then
+if [[ -z "$rules" ]]; then
     echo "No blocked devices found. Nothing to do."
     exit 0
 fi
@@ -87,18 +56,15 @@ echo "Writing rules to: $outfile"
 {
     echo "# Auto-generated allow rules for currently blocked USB devices"
     echo "# Created: $(date)"
-    for id in $ids; do
-        echo "allow id $id"
-    done
+    printf '%s\n' "$rules"
 } > "$outfile"
-chmod 600 "$outfile"
 
 # Reload USBGuard
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active usbguard >/dev/null 2>&1; then
-    systemctl try-reload-or-restart usbguard || systemctl restart usbguard
+    systemctl reload usbguard || systemctl restart usbguard
 elif command -v usbguard >/dev/null 2>&1; then
     usbguard reload || true
 fi
 
 echo "Done. $(wc -l <"$outfile") line(s) written to $outfile"
-echo "Previously blocked devices should now be allowed."
+echo "Previously blocked devices should now be allowed (by id+serial+hash+interface)."
