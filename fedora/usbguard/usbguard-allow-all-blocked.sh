@@ -57,6 +57,7 @@ if ! command -v usbguard >/dev/null 2>&1; then
 fi
 
 read -rp "Enter new USBGuard rules filename (without extension): " fname
+fname="${fname%.conf}"
 
 if [[ -z "${fname}" ]]; then
     echo "Filename cannot be empty." >&2
@@ -90,10 +91,11 @@ echo "Writing rules to: $outfile"
         echo "allow id $id"
     done
 } > "$outfile"
+chmod 600 "$outfile"
 
 # Reload USBGuard
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active usbguard >/dev/null 2>&1; then
-    systemctl reload usbguard || systemctl restart usbguard
+    systemctl try-reload-or-restart usbguard || systemctl restart usbguard
 elif command -v usbguard >/dev/null 2>&1; then
     usbguard reload || true
 fi
