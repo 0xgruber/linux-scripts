@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  shellcheck:
+    name: ShellCheck Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          severity: warning
+          scandir: '.'
+          format: gcc
+
+  test-syntax:
+    name: Syntax Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test shell script syntax
+        run: |
+          echo "Validating shell script syntax..."
+          find . -name "*.sh" -type f | while read script; do
+            echo "Checking: $script"
+            bash -n "$script" || exit 1
+          done
+
+  multi-distro-test:
+    name: Test on Multiple Distributions
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro: [ubuntu, fedora, alpine]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test on ${{ matrix.distro }}
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace ${{ matrix.distro }}:latest sh -c '
+            echo "Testing on ${{ matrix.distro }}..."
+            find /workspace -name "*.sh" -type f | while read script; do
+              echo "Validating: $script"
+              sh -n "$script" || exit 1
+            done
+            echo "✅ All scripts validated on ${{ matrix.distro }}"
+          '
