@@ -1,0 +1,42 @@
+# Custom gitleaks rules for shell/python script repos
+# Built-in gitleaks rules stay active via [extend] useDefault = true.
+# False positives: add lines to .gitleaksignore (format: commit:file:line-number or file:line-number)
+
+[extend]
+useDefault = true
+
+title = "script-repo custom rules"
+
+# Quoted credential literal (bash/python/powershell)
+[[rules]]
+id = "script-plaintext-credential"
+description = "Password/secret/token assigned a quoted literal"
+regex = '''(?i)\$?\w*(password|passwd|pwd|secret|apikey|api_key|token|credential)\w*\s*=\s*["'][^"']{8,}["']'''
+tags = ["credential", "script"]
+
+  [[rules.allowlist]]
+  stopwords = ["example", "sample", "placeholder", "xxxxx", "changeme", "change-me", "your-password", "yourpassword", "please-change", "dummy", "todo", "redacted"]
+
+# Unquoted env-style credential (export PASSWORD=hunter2long)
+[[rules]]
+id = "env-style-credential"
+description = "Unquoted environment credential assignment"
+regex = '''(?i)(?:export\s+|declare\s+-x\s+)?\w*(password|passwd|pwd|secret|apikey|api_key|token)\w*\s*=\s*[A-Za-z0-9/+_\-]{10,}'''
+tags = ["credential", "shell"]
+
+  [[rules.allowlist]]
+  stopwords = ["example", "sample", "placeholder", "xxxxx", "changeme", "change-me", "your-password", "yourpassword", "please-change", "dummy", "todo", "redacted"]
+
+# curl with inline basic auth
+[[rules]]
+id = "curl-inline-basic-auth"
+description = "curl -u with inline credentials"
+regex = '''(?i)\bcurl[^\n]{0,300}?\s-u\s+[A-Za-z0-9._\-]+:[^$"' \t\n]{4,}'''
+tags = ["credential", "shell"]
+
+# Credentials embedded in a URL
+[[rules]]
+id = "url-embedded-credentials"
+description = "user:password inside a URL"
+regex = '''(?i)\b[a-z][a-z0-9+.-]*://[A-Za-z0-9._-]+:[^$/@' \t]{4,}@'''
+tags = ["credential", "url"]
